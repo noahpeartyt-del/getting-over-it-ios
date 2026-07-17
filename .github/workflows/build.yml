@@ -1,4 +1,4 @@
-name: Build iOS IPA
+name: Build iOS IPA (Capacitor)
 on: [push, workflow_dispatch]
 
 jobs:
@@ -13,50 +13,50 @@ jobs:
         with:
           node-version: '24'
 
-      - name: Install Cordova
-        run: npm install -g cordova
-
-      - name: Create Cordova Project and Build iOS
+      - name: Setup Web Directory
         run: |
-          set -euo pipefail
-
-          # Create project and clean the default app folder
-          cordova create myapp com.scratch.gettingoverit "GettingOverIt"
-          rm -rf myapp/www/*
-
-          # Safely copy files, avoiding copying the myapp folder into itself
-          rsync -av --exclude='myapp' --exclude='.github' --exclude='.git' ./ myapp/www/
-
-          cd myapp
-
-          # Add the iOS platform
-          cordova platform add ios
-
-          # Ensure CocoaPods is available and install pods for the iOS project
-          sudo gem install cocoapods || true
-          pod --version || true
+          # Capacitor requires game files to live inside a 'www' folder
+          mkdir -p www
           
-          # Force an emulator build to completely bypass Apple's hardware code-signing restriction
-          cordova build ios --emulator --verbose
+          # Safely move your Scratch files into the www directory, ignoring system folders
+          rsync -av --exclude='www' --exclude='.github' --exclude='.git' ./ www/
 
-          # Package the compiled .app into an unsigned IPA.
+      - name: Install and Initialize Capacitor
+        run: |
+          # Initialize package.json and install core packages
+          npm init -y
+          npm install @capacitor/core @capacitor/cli @capacitor/ios
+          
+          # Configure Capacitor to look for your web asset folder
+          npx cap init "GettingOverIt" "com.scratch.gettingoverit" --web-dir=www
+
+      - name: Add iOS Platform
+        run: |
+          npx cap add ios
+          npx cap sync ios
+
+      - name: Build iOS Application Archive
+        run: |
+          cd ios/App
+          
+          # Compile the project as a clean, unsigned simulator bundle using native Xcode command lines
+          xcodebuild -workspace App.xcworkspace \
+                     -scheme App \
+                     -configuration Debug \
+                     -sdk iphonesimulator \
+                     CODE_SIGNING_ALLOWED=NO \
+                     CODE_SIGN_ING_REQUIRED=NO \
+                     clean build
+
+      - name: Package App Package Into IPA
+        run: |
+          # Structure the App folder exactly into the IPA container format Sideloadly expects
           mkdir -p Payload
-          if [ -d "platforms/ios/build/emulator/GettingOverIt.app" ]; then
-            cp -r "platforms/ios/build/emulator/GettingOverIt.app" Payload/
-          elif [ -d "platforms/ios/build/device/GettingOverIt.app" ]; then
-            cp -r "platforms/ios/build/device/GettingOverIt.app" Payload/
-          else
-            echo "Error: .app not found in expected build directories"
-            echo "Directory listing for platforms/ios/build:"
-            ls -R platforms/ios || true
-            exit 1
-          fi
-
-          # Create an unsigned .ipa by zipping the Payload folder
+          cp -r ios/App/DerivedData/App/Build/Products/Debug-iphonesimulator/App.app Payload/ 2>/dev/null || cp -r ~/Library/Developer/Xcode/DerivedData/*/Build/Products/Debug-iphonesimulator/App.app Payload/
           zip -r GettingOverIt.ipa Payload/
 
       - name: Archive IPA Artifact
         uses: actions/upload-artifact@v4
         with:
           name: unsigned-ipa
-          path: myapp/GettingOverIt.ipa
+          path: GettingOverIt.ipa
