@@ -1,4 +1,4 @@
-nname: Build iOS IPA
+name: Build iOS IPA
 on: [push, workflow_dispatch]
 
 jobs:
@@ -16,21 +16,45 @@ jobs:
       - name: Install Cordova
         run: npm install -g cordova
 
-      - name: Create Cordova Project
+      - name: Create Cordova Project and Build iOS
         run: |
+          set -euo pipefail
+
+          # Create project and clean the default app folder
           cordova create myapp com.scratch.gettingoverit "GettingOverIt"
           rm -rf myapp/www/*
+
+          # Safely copy files, avoiding copying the myapp folder into itself
           rsync -av --exclude='myapp' --exclude='.github' --exclude='.git' ./ myapp/www/
-          
+
           cd myapp
+
+          # Add the iOS platform
           cordova platform add ios
-          
-          # Force an emulator build to skip Apple's forced signing locks
-          cordova build ios --emulator --NO_SIGN
-          
-          # Manually package the generated simulator application folder into a raw .ipa file
+
+          # Ensure CocoaPods is available and install pods for the iOS project
+          # Use gem which is available on macOS runners; allow failure on install if already present
+          sudo gem install cocoapods || true
+          pod --version || true
+          pod install --project-directory=platforms/ios || true
+
+          # Build without signing (lowercase flag) and with verbose output
+          cordova build ios --device --no-sign --verbose
+
+          # Package the compiled .app into an unsigned IPA. Check known build locations and fail with helpful output if missing.
           mkdir -p Payload
-          cp -r platforms/ios/build/emulator/GettingOverIt.app Payload/
+          if [ -d "platforms/ios/build/device/GettingOverIt.app" ]; then
+            cp -r "platforms/ios/build/device/GettingOverIt.app" Payload/
+          elif [ -d "platforms/ios/build/emulator/GettingOverIt.app" ]; then
+            cp -r "platforms/ios/build/emulator/GettingOverIt.app" Payload/
+          else
+            echo "Error: .app not found in expected build directories"
+            echo "Directory listing for platforms/ios/build:"
+            ls -R platforms/ios || true
+            exit 1
+          fi
+
+          # Create an unsigned .ipa by zipping the Payload folder
           zip -r GettingOverIt.ipa Payload/
 
       - name: Archive IPA Artifact
