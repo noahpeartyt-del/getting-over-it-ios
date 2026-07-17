@@ -11,7 +11,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
 
       - name: Install Cordova
         run: npm install -g cordova
@@ -23,10 +23,15 @@ jobs:
           cp -r * myapp/www/ 2>/dev/null || true
           cd myapp
           cordova platform add ios
-          cordova build ios --NO_SIGN
+          cordova build ios --device --NO_SIGN
+          
+          # Manually construct the IPA container package
+          mkdir -p Payload
+          cp -r platforms/ios/build/device/GettingOverIt.app Payload/
+          zip -r GettingOverIt.ipa Payload/
 
       - name: Archive IPA Artifact
         uses: actions/upload-artifact@v4
         with:
           name: unsigned-ipa
-          path: myapp/platforms/ios/build/device/*.ipa
+          path: myapp/GettingOverIt.ipa
