@@ -18,16 +18,22 @@ jobs:
 
       - name: Create Cordova Project
         run: |
+          # Create project and clean the default app folder
           cordova create myapp com.scratch.gettingoverit "GettingOverIt"
           rm -rf myapp/www/*
-          cp -r * myapp/www/ 2>/dev/null || true
+          
+          # Safely copy files, avoiding copying the myapp folder into itself
+          rsync -av --exclude='myapp' --exclude='.github' --exclude='.git' ./ myapp/www/
+          
           cd myapp
           cordova platform add ios
-          cordova build ios --device --NO_SIGN
           
-          # Manually construct the IPA container package
+          # Run the build. If it fails, this line stops and shows the exact logs
+          cordova build ios --device --NO_SIGN --verbose
+          
+          # Manually pack the compiled app folder into an IPA file
           mkdir -p Payload
-          cp -r platforms/ios/build/device/GettingOverIt.app Payload/
+          cp -r platforms/ios/build/device/GettingOverIt.app Payload/ || cp -r platforms/ios/build/emulator/GettingOverIt.app Payload/
           zip -r GettingOverIt.ipa Payload/
 
       - name: Archive IPA Artifact
