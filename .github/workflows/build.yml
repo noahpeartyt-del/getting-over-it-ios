@@ -33,20 +33,18 @@ jobs:
           cordova platform add ios
 
           # Ensure CocoaPods is available and install pods for the iOS project
-          # Use gem which is available on macOS runners; allow failure on install if already present
           sudo gem install cocoapods || true
           pod --version || true
-          pod install --project-directory=platforms/ios || true
+          
+          # Force an emulator build to completely bypass Apple's hardware code-signing restriction
+          cordova build ios --emulator --verbose
 
-          # Build without signing (lowercase flag) and with verbose output
-          cordova build ios --device --no-sign --verbose
-
-          # Package the compiled .app into an unsigned IPA. Check known build locations and fail with helpful output if missing.
+          # Package the compiled .app into an unsigned IPA.
           mkdir -p Payload
-          if [ -d "platforms/ios/build/device/GettingOverIt.app" ]; then
-            cp -r "platforms/ios/build/device/GettingOverIt.app" Payload/
-          elif [ -d "platforms/ios/build/emulator/GettingOverIt.app" ]; then
+          if [ -d "platforms/ios/build/emulator/GettingOverIt.app" ]; then
             cp -r "platforms/ios/build/emulator/GettingOverIt.app" Payload/
+          elif [ -d "platforms/ios/build/device/GettingOverIt.app" ]; then
+            cp -r "platforms/ios/build/device/GettingOverIt.app" Payload/
           else
             echo "Error: .app not found in expected build directories"
             echo "Directory listing for platforms/ios/build:"
