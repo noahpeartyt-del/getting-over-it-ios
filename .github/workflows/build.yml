@@ -1,0 +1,32 @@
+name: Build iOS IPA
+on: [push, workflow_dispatch]
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Cordova
+        run: npm install -g cordova
+
+      - name: Create Cordova Project
+        run: |
+          cordova create myapp com.scratch.gettingoverit "GettingOverIt"
+          rm -rf myapp/www/*
+          cp -r * myapp/www/ 2>/dev/null || true
+          cd myapp
+          cordova platform add ios
+          cordova build ios --NO_SIGN
+
+      - name: Archive IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-ipa
+          path: myapp/platforms/ios/build/device/*.ipa
